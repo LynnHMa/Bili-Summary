@@ -631,5 +631,59 @@ async def get_video_danmaku(url_or_bvid: str, max_count: int = 100) -> str:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+@mcp.tool
+async def get_user_videos(mid: int, ps: int = 10, pn: int = 1) -> str:
+    """获取B站用户的视频列表。
+    
+    参数:
+        mid: 用户的 UID
+        ps: 每页数量，默认 10
+        pn: 页码，默认 1
+    
+    返回:
+        视频列表 JSON
+    """
+    img_key, sub_key = await get_wbi_keys()
+    params = {
+        "mid": mid,
+        "ps": ps,
+        "pn": pn,
+        "tid": 0,
+        "keyword": "",
+        "order": "pubdate"
+    }
+    signed_params = enc_wbi(params, img_key, sub_key)
+    
+    url = "https://api.bilibili.com/x/space/wbi/arc/search"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": f"https://space.bilibili.com/{mid}/video"
+    }
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, params=signed_params, headers=headers) as response:
+            data = await response.json()
+            
+    if data.get("code") != 0:
+        return json.dumps({"error": data.get("message", "未知错误"), "code": data.get("code")}, ensure_ascii=False)
+    
+    list_data = data.get("data", {}).get("list", {}).get("vlist", [])
+    
+    result = []
+    for v in list_data:
+        result.append({
+            "bvid": v.get("bvid"),
+            "title": v.get("title"),
+            "description": v.get("description"),
+            "duration": v.get("length"),
+            "publish_time": v.get("created"),
+            "play": v.get("play"),
+            "comment": v.get("comment"),
+            "author": v.get("author")
+        })
+    
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
 if __name__ == "__main__":
     mcp.run()
